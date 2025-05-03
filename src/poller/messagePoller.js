@@ -1,6 +1,10 @@
 const db = require("../db");
 const utils = require("../utils");
-const { privateKeyToAccount, generatePrivateKey , privateKeyToHex} = require("viem/accounts");
+const {
+  privateKeyToAccount,
+  generatePrivateKey,
+  privateKeyToHex,
+} = require("viem/accounts");
 const sqlite3 = require("sqlite3").verbose();
 const config = require("../config");
 
@@ -49,25 +53,34 @@ async function registerIfNeeded(phoneNumber) {
       console.log("Generated PK:", privateKey);
 
       const account = privateKeyToAccount(privateKey);
-      const privateKeyHex = typeof privateKey === "string" ? privateKey : privateKeyToHex(privateKey);
-const encrypted = utils.encrypt(privateKeyHex);
-
+      const privateKeyHex =
+        typeof privateKey === "string"
+          ? privateKey
+          : privateKeyToHex(privateKey);
+      const encrypted = utils.encrypt(privateKeyHex);
 
       const insertUser = `INSERT INTO users (phone_number, address, encrypted_private_key) VALUES (?, ?, ?)`;
-      dbConn.run(insertUser, [phoneNumber, account.address, encrypted], async (err) => {
-        dbConn.close();
-        if (err) return reject(err);
+      dbConn.run(
+        insertUser,
+        [phoneNumber, account.address, encrypted],
+        async (err) => {
+          dbConn.close();
+          if (err) return reject(err);
 
-        console.log(`✅ Registered ${phoneNumber}: ${account.address}`);
-        try {
-          const confirmation = `Wallet created Check it at:\nhttps://pharosscan.xyz/address/${account.address}`;
-          await utils.sendMessageViaAppleScript(phoneNumber, confirmation);
-        } catch (sendErr) {
-          console.error("❌ Failed to send confirmation message:", sendErr.message);
+          console.log(`✅ Registered ${phoneNumber}: ${account.address}`);
+          try {
+            const confirmation = `Wallet created Check it at:\nhttps://pharosscan.xyz/address/${account.address}`;
+            await utils.sendMessageViaAppleScript(phoneNumber, confirmation);
+          } catch (sendErr) {
+            console.error(
+              "❌ Failed to send confirmation message:",
+              sendErr.message
+            );
+          }
+
+          resolve(account.address);
         }
-
-        resolve(account.address);
-      });
+      );
     });
   });
 }

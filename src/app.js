@@ -17,6 +17,6 @@ app.get("/", (req, res) => {
 app.use("/api", routes);
 
 app.use(errorHandler);
-startPolling(1000); // every 1s
+// startPolling(1000); // every 1s
 
 module.exports = app;
