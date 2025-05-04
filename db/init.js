@@ -1,5 +1,5 @@
 const sqlite3 = require("sqlite3").verbose();
-const config = require("../config.js");
+const config = require("../config");
 
 const db = new sqlite3.Database(config.DB_PATH);
 

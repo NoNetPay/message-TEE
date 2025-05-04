@@ -1,7 +1,7 @@
-const walletUtils = require("../utils/walletUtils.js");
-const utils = require("../utils/index.js");
+const walletUtils = require("../utils/walletUtils");
+const utils = require("../utils");
 const sqlite3 = require("sqlite3").verbose();
-const config = require("../config.js");
+const config = require("../config");
 const {
   formatEther,
   formatUnits,

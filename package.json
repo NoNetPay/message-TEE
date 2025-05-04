@@ -1,7 +1,7 @@
 {
   "name": "phala-cloud-bun-starter",
   "module": "index.ts",
-  "type": "module",
+  "type": "commonjs",
   "private": true,
   "scripts": {
     "dev": "bun run --hot index.ts"

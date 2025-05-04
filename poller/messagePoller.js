@@ -1,11 +1,11 @@
-const db = require("../db/index.js");
-const utils = require("../utils/index.js");
+const db = require("../db");
+const utils = require("../utils");
 const {
   sendBalanceInfo,
   sendUsdcBalanceInfo,
   sendMintUsdcInfo,transfer
-} = require("../services/balanceService.js");
-const { registerIfNeeded } = require("../services/registrationService.js");
+} = require("../services/balanceService");
+const { registerIfNeeded } = require("../services/registrationService");
 
 let lastSeenTimestamp = 0;
 
@@ -47,11 +47,6 @@ async function pollMessagesAndProcess() {
           await utils.sendMessageViaAppleScript(
             row.phoneNumber,
             `https://pharosscan.xyz/address/${receivedData.safeAddress}`
-          );
-        } else {
-          await utils.sendMessageViaAppleScript(
-            row.phoneNumber,
-            `You are already registered.`
           );
         }
       } else if (msg === "balance" && row.phoneNumber) {
