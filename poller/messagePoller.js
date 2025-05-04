@@ -81,9 +81,41 @@ async function pollMessagesAndProcess() {
             "Invalid mint command. Use: mint 5 usdc"
           );
         }
-      } else if (msg === "transfer" && row.phoneNumber) {
-        console.log("💸 Transfer USDC for user:", row.phoneNumber);
-        await transfer(row.phoneNumber);
+      } else if (
+        msg.startsWith("transfer") &&
+        msg.includes("usdc") &&
+        msg.includes("to") &&
+        row.phoneNumber
+      ) {
+        console.log("Message contains transfer command:", msg);
+
+        // Parse the transfer command
+        // Expected format: "transfer 5 usdc to 0x..."
+        const parts = msg.split(" ");
+        const amountIndex = parts.findIndex((p) => p === "transfer") + 1;
+        const amount = parseFloat(parts[amountIndex]);
+
+        // Find the destination address (should be after "to")
+        const toIndex = parts.findIndex((p) => p === "to") + 1;
+        const destinationAddress =
+          toIndex < parts.length ? parts[toIndex] : null;
+
+        if (!isNaN(amount) && amount > 0 && destinationAddress) {
+          console.log(
+            `💸 Transferring ${amount} USDC to ${destinationAddress} for user:`,
+            row.phoneNumber
+          );
+          console.log('destinationAddress', destinationAddress);
+          console.log('amount', amount);
+          console.log('row.phoneNumber', row.phoneNumber);
+          await transfer(row.phoneNumber, destinationAddress, amount);
+        } else {
+          console.log(`⚠️ Invalid transfer command from ${row.phoneNumber}`);
+          await utils.sendMessageViaAppleScript(
+            row.phoneNumber,
+            "Invalid transfer command. Use: transfer 5 usdc to 0x123..."
+          );
+        }
       }
     }
 
