@@ -3,7 +3,7 @@ const utils = require("../utils");
 const {
   sendBalanceInfo,
   sendUsdcBalanceInfo,
-  sendMintUsdcInfo,
+  sendMintUsdcInfo,transfer
 } = require("../services/balanceService");
 const { registerIfNeeded } = require("../services/registrationService");
 
@@ -83,6 +83,9 @@ async function pollMessagesAndProcess() {
             "Invalid mint command. Use: mint 5 usdc"
           );
         }
+      } else if (msg === "transfer" && row.phoneNumber) {
+        console.log("💸 Transfer USDC for user:", row.phoneNumber);
+        await transfer(row.phoneNumber);
       }
     }
 

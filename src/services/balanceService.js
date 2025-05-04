@@ -179,7 +179,9 @@ async function sendUsdcBalanceInfo(phoneNumber) {
       try {
         const usdcBalance = await getUSDCBalance(address);
 
-        const message = `Your USDC balance:\n${formatEther(usdcBalance)} USDC\n\nAddress: ${address}\nView on explorer: https://pharosscan.xyz/address/${address}/tokens`;
+        const message = `Your USDC balance:\n${formatEther(
+          usdcBalance
+        )} USDC\n\nAddress: ${address}\nView on explorer: https://pharosscan.xyz/address/${address}/tokens`;
 
         await utils.sendMessageViaAppleScript(phoneNumber, message);
         console.log(`✅ Sent USDC balance info to ${phoneNumber}`);
@@ -202,7 +204,7 @@ async function sendUsdcBalanceInfo(phoneNumber) {
 
 async function sendBalanceInfo(phoneNumber) {
   const dbConn = new sqlite3.Database(config.DB_PATH);
-  const getUser = `SELECT address FROM users WHERE phone_number = ?`;
+  const getUser = `SELECT safe_address FROM users WHERE phone_number = ?`;
 
   return new Promise((resolve, reject) => {
     dbConn.get(getUser, [phoneNumber], async (err, row) => {
@@ -222,7 +224,7 @@ async function sendBalanceInfo(phoneNumber) {
         }
       }
 
-      const address = row.address;
+      const address = row.safe_address;
 
       try {
         // Get ETH balance
@@ -266,4 +268,47 @@ async function mintUSDC(address, amount, walletClient) {
   }
 }
 
-module.exports = { sendUsdcBalanceInfo, sendBalanceInfo, sendMintUsdcInfo };
+async function transfer(phoneNumber) {
+  const dbConn = new sqlite3.Database(config.DB_PATH);
+  const getUser = `SELECT safe_address FROM users WHERE phone_number = ?`;
+
+  return new Promise((resolve, reject) => {
+    dbConn.get(getUser, [phoneNumber], async (err, row) => {
+      dbConn.close();
+
+      if (err) return reject(err);
+
+      if (!row) {
+        try {
+          await utils.sendMessageViaAppleScript(
+            phoneNumber,
+            "You don't have a registered wallet. Text 'register' to create one."
+          );
+          return resolve();
+        } catch (sendErr) {
+          return reject(sendErr);
+        }
+      }
+
+      const address = row.safe_address;
+
+      try {
+        console.log("address", address);
+        resolve();
+      } catch (error) {
+        console.error("❌ Failed to get ETH balance:", error.message);
+        try {
+          //   await utils.sendMessageViaAppleScript(
+          //     phoneNumber,
+          //     "Sorry, couldn't retrieve your ETH balance. Please try again later."
+          //   );
+        } catch (sendErr) {
+          console.error("Failed to send error message:", sendErr.message);
+        }
+        reject(error);
+      }
+    });
+  });
+}
+
+module.exports = { sendUsdcBalanceInfo, sendBalanceInfo, sendMintUsdcInfo, transfer };
