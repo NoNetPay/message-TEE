@@ -1,87 +1,101 @@
 const db = require("../db");
 const utils = require("../utils");
 const {
-  privateKeyToAccount,
-  generatePrivateKey,
-  privateKeyToHex,
-} = require("viem/accounts");
-const sqlite3 = require("sqlite3").verbose();
-const config = require("../config");
+  sendBalanceInfo,
+  sendUsdcBalanceInfo,
+  sendMintUsdcInfo,
+} = require("../services/balanceService");
+const { registerIfNeeded } = require("../services/registrationService");
 
 let lastSeenTimestamp = 0;
 
-async function pollMessagesAndRegister() {
+async function pollMessagesAndProcess() {
   try {
     if (!utils.checkDatabaseExists()) return;
 
+    // Get the most recent messages
     const rows = await db.getAllMessages(100, 0);
     const messages = utils.formatMessages(rows);
+
+    let newMessagesProcessed = false;
 
     for (const row of messages) {
       const msg = row.text?.trim().toLowerCase();
       const ts = row.timestamp;
 
-      if (msg === "register" && row.phoneNumber && ts > lastSeenTimestamp) {
+      // Only process messages newer than our last seen timestamp
+      if (ts <= lastSeenTimestamp) continue;
+
+      // Update the last seen timestamp for any new message
+      if (ts > lastSeenTimestamp) {
+        lastSeenTimestamp = ts;
+        newMessagesProcessed = true;
+      }
+
+      if (msg === "register" && row.phoneNumber) {
         console.log("⏳ Registering new user:", row.phoneNumber);
         await registerIfNeeded(row.phoneNumber);
-        lastSeenTimestamp = ts;
+      } else if (msg === "balance" && row.phoneNumber) {
+        console.log("💰 Checking ETH balance for user:", row.phoneNumber);
+        await sendBalanceInfo(row.phoneNumber);
+      } else if (msg === "usdc balance" && row.phoneNumber) {
+        console.log("💵 Checking USDC balance for user:", row.phoneNumber);
+        await sendUsdcBalanceInfo(row.phoneNumber);
+      } else if (msg === "mint usdc" && row.phoneNumber) {
+        console.log("💸 Minting USDC for user:", row.phoneNumber);
+        await sendMintUsdcInfo(row.phoneNumber);
+      } else if (
+        msg.startsWith("mint") &&
+        msg.includes("usdc") &&
+        row.phoneNumber
+      ) {
+        const parts = msg.split(" ");
+        const amountIndex = parts.findIndex((p) => p === "mint") + 1;
+        const amount = parseFloat(parts[amountIndex]);
+
+        if (!isNaN(amount) && amount > 0) {
+          console.log(`💸 Minting ${amount} USDC for user:`, row.phoneNumber);
+          await sendMintUsdcInfo(row.phoneNumber, amount);
+        } else {
+          console.log(`⚠️ Invalid mint amount from ${row.phoneNumber}`);
+          await utils.sendMessageViaAppleScript(
+            row.phoneNumber,
+            "Invalid mint command. Use: mint 5 usdc"
+          );
+        }
       }
+    }
+
+    if (newMessagesProcessed) {
+      console.log(`Processed messages up to timestamp: ${lastSeenTimestamp}`);
     }
   } catch (err) {
     console.error("Error polling messages:", err.message);
   }
 }
 
-function startPolling(interval = 1000) {
-  console.log("🛰️ Starting iMessage poller...");
-  setInterval(pollMessagesAndRegister, interval);
+async function initializeLastSeen() {
+  try {
+    if (!utils.checkDatabaseExists()) return;
+
+    const rows = await db.getAllMessages(1, 0);
+    if (rows && rows.length > 0) {
+      const messages = utils.formatMessages(rows);
+      if (messages.length > 0) {
+        // Set the initial lastSeenTimestamp to the most recent message
+        lastSeenTimestamp = messages[0].timestamp;
+        console.log(`Initialized last seen timestamp to: ${lastSeenTimestamp}`);
+      }
+    }
+  } catch (err) {
+    console.error("Error initializing last seen timestamp:", err.message);
+  }
 }
 
-async function registerIfNeeded(phoneNumber) {
-  const dbConn = new sqlite3.Database(config.DB_PATH);
-  const checkUser = `SELECT * FROM users WHERE phone_number = ?`;
-
-  return new Promise((resolve, reject) => {
-    dbConn.get(checkUser, [phoneNumber], async (err, row) => {
-      if (err) return reject(err);
-      if (row) {
-        dbConn.close();
-        return resolve(null); // already registered
-      }
-
-      const privateKey = generatePrivateKey();
-      console.log("Generated PK:", privateKey);
-
-      const account = privateKeyToAccount(privateKey);
-      const privateKeyHex =
-        typeof privateKey === "string"
-          ? privateKey
-          : privateKeyToHex(privateKey);
-      const encrypted = utils.encrypt(privateKeyHex);
-
-      const insertUser = `INSERT INTO users (phone_number, address, encrypted_private_key) VALUES (?, ?, ?)`;
-      dbConn.run(
-        insertUser,
-        [phoneNumber, account.address, encrypted],
-        async (err) => {
-          dbConn.close();
-          if (err) return reject(err);
-
-          console.log(`✅ Registered ${phoneNumber}: ${account.address}`);
-          try {
-            const confirmation = `Wallet created Check it at:\nhttps://pharosscan.xyz/address/${account.address}`;
-            await utils.sendMessageViaAppleScript(phoneNumber, confirmation);
-          } catch (sendErr) {
-            console.error(
-              "❌ Failed to send confirmation message:",
-              sendErr.message
-            );
-          }
-
-          resolve(account.address);
-        }
-      );
-    });
+function startPolling(interval = 1000) {
+  console.log("🛰️ Starting iMessage poller...");
+  initializeLastSeen().then(() => {
+    setInterval(pollMessagesAndProcess, interval);
   });
 }
 

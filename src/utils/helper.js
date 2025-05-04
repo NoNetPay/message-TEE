@@ -1,6 +1,7 @@
 const crypto = require("crypto");
-// const ENCRYPTION_KEY = config.ENCRYPTION_KEY; // 32 bytes
-// const IV_LENGTH = 16;
+const config = require("../config");
+const ENCRYPTION_KEY = config.ENCRYPTION_KEY; // 32 bytes
+const IV_LENGTH = 16;
 
 function encrypt(text) {
   const iv = crypto.randomBytes(IV_LENGTH);
