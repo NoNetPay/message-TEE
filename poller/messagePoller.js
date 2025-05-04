@@ -3,7 +3,8 @@ const utils = require("../utils");
 const {
   sendBalanceInfo,
   sendUsdcBalanceInfo,
-  sendMintUsdcInfo,transfer
+  sendMintUsdcInfo,
+  transfer,
 } = require("../services/balanceService");
 const { registerIfNeeded } = require("../services/registrationService");
 
@@ -37,17 +38,19 @@ async function pollMessagesAndProcess() {
         const receivedData = await registerIfNeeded(row.phoneNumber);
         console.log("receivedData", receivedData);
 
-       
         if (receivedData !== "already_registered") {
+          console.log("✅ Registration successful for:", row.phoneNumber);
           await utils.sendMessageViaAppleScript(
             row.phoneNumber,
             `You are now registered.`
           );
 
-          await utils.sendMessageViaAppleScript(
-            row.phoneNumber,
-            `https://pharosscan.xyz/address/${receivedData.safeAddress}`
+          console.log(
+            "✅ Sending registration message to user:",
+            row.phoneNumber
           );
+          const link = `https://pharosscan.xyz/address/${receivedData.safeAddress}`;
+          await utils.sendMessageViaAppleScript(row.phoneNumber, link);
         }
       } else if (msg === "balance" && row.phoneNumber) {
         console.log("💰 Checking ETH balance for user:", row.phoneNumber);

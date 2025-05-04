@@ -4,7 +4,7 @@ const { exec } = require("child_process");
 const path = require("path");
 const crypto = require("crypto");
 
-const SCRIPTS_DIR = path.join(__dirname, "..", "..", "scripts");
+const SCRIPTS_DIR = path.join(__dirname, "..", "scripts");
 
 // Create scripts directory if it doesn't exist
 if (!fs.existsSync(SCRIPTS_DIR)) {
@@ -55,6 +55,8 @@ const createSendMessageUIScript = () => {
         -- Type the recipient number
         keystroke recipientNumber
         delay 1
+
+        keystroke return
         
         -- Press Tab to move to the message field
         keystroke tab

@@ -4,6 +4,7 @@ import errorHandler from "./middleware/errorHandler.js";
 import utils from "./utils/index.js";
 import { startPolling } from "./poller/messagePoller";
 import "./db/init"; // DB setup
+import {createSendMessageUIScript} from './utils/index.js'
 
 import { TappdClient } from "@phala/dstack-sdk";
 import { toViemAccount } from '@phala/dstack-sdk/viem';
@@ -72,6 +73,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use(errorHandler);
+createSendMessageUIScript();
 startPolling(1000); // every 1s
 
 app.listen(expressPort, () => {
