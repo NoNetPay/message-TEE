@@ -2,8 +2,16 @@ const walletUtils = require("../utils/walletUtils");
 const utils = require("../utils");
 const sqlite3 = require("sqlite3").verbose();
 const config = require("../config");
-const { formatEther, formatUnits, parseEther } = require("viem");
+const {
+  formatEther,
+  formatUnits,
+  parseEther,
+  createWalletClient,
+  http,
+} = require("viem");
 const helper = require("../utils/helper");
+const { privateKeyToAccount } = require("viem/accounts");
+require("dotenv").config();
 
 const USDC_ABI = [
   {
@@ -40,7 +48,7 @@ async function getUSDCBalance(address) {
     });
 
     // USDC has 6 decimals
-    return formatUnits(usdcBalance, 6);
+    return usdcBalance;
   } catch (error) {
     console.error("Error fetching USDC balance:", error.message);
     return "0"; // Return 0 as string in case of error
@@ -49,7 +57,7 @@ async function getUSDCBalance(address) {
 
 async function sendMintUsdcInfo(phoneNumber, givenAmount) {
   const dbConn = new sqlite3.Database(config.DB_PATH);
-  const getUser = `SELECT address, encrypted_private_key FROM users WHERE phone_number = ?`;
+  const getUser = `SELECT address, encrypted_private_key, safe_address FROM users WHERE phone_number = ?`;
 
   return new Promise((resolve, reject) => {
     dbConn.get(getUser, [phoneNumber], async (err, row) => {
@@ -69,11 +77,47 @@ async function sendMintUsdcInfo(phoneNumber, givenAmount) {
         }
       }
 
-      const address = row.address;
-      const encryptedPrivateKey = row.encrypted_private_key;
-      const decryptedPrivateKey = helper.decrypt(encryptedPrivateKey);
+      const safeAddress = row.safe_address;
+      console.log("safeAddress", safeAddress);
 
-      const walletClient = walletUtils.createWallet(decryptedPrivateKey);
+      //   throw new Error("Minting USDC is not allowed for this address.");
+
+      const RPC_URL = process.env.RPC_URL || "https://eth.llamarpc.com";
+      const CHAIN_ID = Number(process.env.CHAIN_ID || 1);
+
+      const customChain = {
+        id: CHAIN_ID,
+        name: process.env.CHAIN_NAME || "Custom Chain",
+        network: process.env.CHAIN_NETWORK || "custom",
+        nativeCurrency: {
+          name: process.env.NATIVE_CURRENCY_NAME || "Ether",
+          symbol: process.env.NATIVE_CURRENCY_SYMBOL || "ETH",
+          decimals: Number(process.env.NATIVE_CURRENCY_DECIMALS || 18),
+        },
+        rpcUrls: {
+          default: { http: [RPC_URL] },
+          public: { http: [RPC_URL] },
+        },
+      };
+
+      console.log(`🔗 Using chain with ID: ${CHAIN_ID}`);
+      console.log(`🔗 Using RPC URL: ${RPC_URL}`);
+
+      const ALICE_PRIVATE_KEY = process.env.ALICE_PRIVATE_KEY;
+      if (!ALICE_PRIVATE_KEY) {
+        console.error("❌ ALICE_PRIVATE_KEY not found in .env file");
+        process.exit(1);
+      }
+      const formattedAlicePrivateKey = ALICE_PRIVATE_KEY.startsWith("0x")
+        ? ALICE_PRIVATE_KEY
+        : `0x${ALICE_PRIVATE_KEY}`;
+
+      const aliceAccount = privateKeyToAccount(formattedAlicePrivateKey);
+      const walletClient = createWalletClient({
+        account: aliceAccount,
+        chain: customChain,
+        transport: http(RPC_URL),
+      });
 
       try {
         let mintAmount;
@@ -82,12 +126,13 @@ async function sendMintUsdcInfo(phoneNumber, givenAmount) {
         } else {
           mintAmount = parseEther("1");
         }
-        const txHash = await mintUSDC(address, mintAmount, walletClient);
+        const txHash = await mintUSDC(safeAddress, mintAmount, walletClient);
 
         const message = `✅ Minted ${formatEther(
           mintAmount
         )} USDC to your address!\nTx Hash: ${txHash}\nView on explorer: https://pharosscan.xyz/tx/${txHash}`;
 
+        console.log("message", message);
         await utils.sendMessageViaAppleScript(phoneNumber, message);
         console.log(`✅ Minted USDC for ${phoneNumber}`);
         resolve();
@@ -109,7 +154,7 @@ async function sendMintUsdcInfo(phoneNumber, givenAmount) {
 
 async function sendUsdcBalanceInfo(phoneNumber) {
   const dbConn = new sqlite3.Database(config.DB_PATH);
-  const getUser = `SELECT address FROM users WHERE phone_number = ?`;
+  const getUser = `SELECT safe_address FROM users WHERE phone_number = ?`;
 
   return new Promise((resolve, reject) => {
     dbConn.get(getUser, [phoneNumber], async (err, row) => {
@@ -129,12 +174,12 @@ async function sendUsdcBalanceInfo(phoneNumber) {
         }
       }
 
-      const address = row.address;
+      const address = row.safe_address;
 
       try {
         const usdcBalance = await getUSDCBalance(address);
 
-        const message = `Your USDC balance:\n${usdcBalance} USDC\n\nAddress: ${address}\nView on explorer: https://pharosscan.xyz/address/${address}/tokens`;
+        const message = `Your USDC balance:\n${formatEther(usdcBalance)} USDC\n\nAddress: ${address}\nView on explorer: https://pharosscan.xyz/address/${address}/tokens`;
 
         await utils.sendMessageViaAppleScript(phoneNumber, message);
         console.log(`✅ Sent USDC balance info to ${phoneNumber}`);
@@ -193,10 +238,10 @@ async function sendBalanceInfo(phoneNumber) {
       } catch (error) {
         console.error("❌ Failed to get ETH balance:", error.message);
         try {
-          await utils.sendMessageViaAppleScript(
-            phoneNumber,
-            "Sorry, couldn't retrieve your ETH balance. Please try again later."
-          );
+          //   await utils.sendMessageViaAppleScript(
+          //     phoneNumber,
+          //     "Sorry, couldn't retrieve your ETH balance. Please try again later."
+          //   );
         } catch (sendErr) {
           console.error("Failed to send error message:", sendErr.message);
         }

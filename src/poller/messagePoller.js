@@ -34,7 +34,26 @@ async function pollMessagesAndProcess() {
 
       if (msg === "register" && row.phoneNumber) {
         console.log("⏳ Registering new user:", row.phoneNumber);
-        await registerIfNeeded(row.phoneNumber);
+        const receivedData = await registerIfNeeded(row.phoneNumber);
+        console.log("receivedData", receivedData);
+
+       
+        if (receivedData !== "already_registered") {
+          await utils.sendMessageViaAppleScript(
+            row.phoneNumber,
+            `You are now registered.`
+          );
+
+          await utils.sendMessageViaAppleScript(
+            row.phoneNumber,
+            `https://pharosscan.xyz/address/${receivedData.safeAddress}`
+          );
+        } else {
+          await utils.sendMessageViaAppleScript(
+            row.phoneNumber,
+            `You are already registered.`
+          );
+        }
       } else if (msg === "balance" && row.phoneNumber) {
         console.log("💰 Checking ETH balance for user:", row.phoneNumber);
         await sendBalanceInfo(row.phoneNumber);
@@ -49,6 +68,7 @@ async function pollMessagesAndProcess() {
         msg.includes("usdc") &&
         row.phoneNumber
       ) {
+        console.log("Message contains mint command:", msg);
         const parts = msg.split(" ");
         const amountIndex = parts.findIndex((p) => p === "mint") + 1;
         const amount = parseFloat(parts[amountIndex]);
