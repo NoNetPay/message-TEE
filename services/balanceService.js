@@ -268,9 +268,9 @@ async function mintUSDC(address, amount, walletClient) {
   }
 }
 
-async function transfer(phoneNumber) {
+async function transfer(phoneNumber, toAddress, amount) {
   const dbConn = new sqlite3.Database(config.DB_PATH);
-  const getUser = `SELECT safe_address FROM users WHERE phone_number = ?`;
+  const getUser = `SELECT address, encrypted_private_key, safe_address FROM users WHERE phone_number = ?`;
 
   return new Promise((resolve, reject) => {
     dbConn.get(getUser, [phoneNumber], async (err, row) => {
@@ -290,18 +290,93 @@ async function transfer(phoneNumber) {
         }
       }
 
-      const address = row.safe_address;
-
+      const ownerAddress = row.address;
+      const encryptedPrivateKey = row.encrypted_private_key;
+      const safeAddress = row.safe_address;
+      
       try {
-        console.log("address", address);
+        // Decrypt the private key (you'll need to implement this based on how you encrypt it)
+        const privateKey = await helper.decryptPrivateKey(encryptedPrivateKey);
+        
+        // Create account from private key
+        const account = privateKeyToAccount(privateKey);
+        
+        // Create a wallet client for signing
+        const walletClient = createWalletClient({
+          account,
+          chain: customChain,
+          transport: http(RPC_URL),
+        });
+        
+        // For this example, we'll transfer 10 USDC to address 0
+        const recipient = toAddress || "0x0000000000000000000000000000000000000000";
+        const transferAmount = parseEther(amount || "10");
+        
+        // Encode the transaction data for USDC transfer
+        // For a Safe transaction, we need to create a transaction object that will be signed
+        // This typically involves the Safe's contract interface
+        
+        // 1. Create the USDC transfer calldata
+        const usdcTransferCalldata = publicClient.encodeFunctionData({
+          abi: USDC_ABI,
+          functionName: "transfer", // Assuming there's a transfer function in the ABI
+          args: [recipient, transferAmount],
+        });
+        
+        // 2. Create the Safe transaction object
+        // Note: In a real implementation, you would use the Safe SDK or similar
+        // This is a simplified version
+        const safeTransaction = {
+          to: USDC_ADDRESS,
+          value: 0n, // No ETH is being sent
+          data: usdcTransferCalldata,
+          operation: 0, // 0 for Call, 1 for DelegateCall
+          safeTxGas: 0n,
+          baseGas: 0n,
+          gasPrice: 0n,
+          gasToken: "0x0000000000000000000000000000000000000000",
+          refundReceiver: "0x0000000000000000000000000000000000000000",
+          nonce: await getSafeNonce(safeAddress), // You'll need to implement this function
+        };
+        
+        // 3. Calculate the transaction hash that needs to be signed
+        const safeTxHash = await calculateSafeTxHash(safeTransaction, safeAddress);
+        
+        // 4. Sign the transaction hash
+        const signature = await walletClient.signMessage({
+          message: { raw: safeTxHash },
+        });
+        
+        // 5. Send the signed transaction to the user
+        const message = `✅ Transaction signed!\n
+          Safe Address: ${safeAddress}
+          To: ${recipient}
+          Amount: ${amount || "10"} USDC
+          Signature: ${signature}
+          
+          This signature can be used to execute the transaction on your behalf.`;
+        
+        await utils.sendMessageViaAppleScript(phoneNumber, message);
+        console.log(`✅ Transaction signed for ${phoneNumber}`);
+        
+        // 6. Optionally broadcast the transaction directly
+        const txHash = await executeSafeTransaction(safeTransaction, signature, safeAddress);
+        
+        if (txHash) {
+          await utils.sendMessageViaAppleScript(
+            phoneNumber,
+            `Transaction broadcast! Track it here: https://pharosscan.xyz/tx/${txHash}`
+          );
+        }
+        
         resolve();
       } catch (error) {
-        console.error("❌ Failed to get ETH balance:", error.message);
+        console.error("❌ Failed to sign transaction:", error.message);
         try {
-          //   await utils.sendMessageViaAppleScript(
-          //     phoneNumber,
-          //     "Sorry, couldn't retrieve your ETH balance. Please try again later."
-          //   );
+          await utils.sendMessageViaAppleScript(
+            phoneNumber,
+            "Sorry, couldn't sign the transaction. Please try again later."
+          );
         } catch (sendErr) {
           console.error("Failed to send error message:", sendErr.message);
         }
@@ -309,6 +384,129 @@ async function transfer(phoneNumber) {
       }
     });
   });
+}
+
+// Helper functions that you'll need to implement
+async function getSafeNonce(safeAddress) {
+  // Get the current nonce of the Safe contract
+  try {
+    // You would need the Safe ABI for this
+    const nonce = await publicClient.readContract({
+      address: safeAddress,
+      abi: SAFE_ABI, // You'll need to define this
+      functionName: "nonce",
+    });
+    return nonce;
+  } catch (error) {
+    console.error("Error getting Safe nonce:", error.message);
+    return 0n; // Default to 0 if there's an error
+  }
+}
+
+async function calculateSafeTxHash(safeTransaction, safeAddress) {
+  // This would typically be done using the Safe SDK
+  // For this example, we'll use a simplified approach
+  
+  // Pack the transaction data according to the Safe contract format
+  // This is a simplified version and may need adjustment based on your Safe version
+  const txData = publicClient.encodeFunctionData({
+    abi: [
+      {
+        inputs: [
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "data", type: "bytes" },
+          { name: "operation", type: "uint8" },
+          { name: "safeTxGas", type: "uint256" },
+          { name: "baseGas", type: "uint256" },
+          { name: "gasPrice", type: "uint256" },
+          { name: "gasToken", type: "address" },
+          { name: "refundReceiver", type: "address" },
+          { name: "nonce", type: "uint256" },
+        ],
+        name: "getTransactionHash",
+        outputs: [{ name: "", type: "bytes32" }],
+        stateMutability: "view",
+        type: "function",
+      },
+    ],
+    functionName: "getTransactionHash",
+    args: [
+      safeTransaction.to,
+      safeTransaction.value,
+      safeTransaction.data,
+      safeTransaction.operation,
+      safeTransaction.safeTxGas,
+      safeTransaction.baseGas,
+      safeTransaction.gasPrice,
+      safeTransaction.gasToken,
+      safeTransaction.refundReceiver,
+      safeTransaction.nonce,
+    ],
+  });
+  
+  // Call the Safe contract to get the transaction hash
+  const txHash = await publicClient.readContract({
+    address: safeAddress,
+    abi: SAFE_ABI, // You'll need to define this
+    functionName: "getTransactionHash",
+    args: [
+      safeTransaction.to,
+      safeTransaction.value,
+      safeTransaction.data,
+      safeTransaction.operation,
+      safeTransaction.safeTxGas,
+      safeTransaction.baseGas,
+      safeTransaction.gasPrice,
+      safeTransaction.gasToken,
+      safeTransaction.refundReceiver,
+      safeTransaction.nonce,
+    ],
+  });
+  
+  return txHash;
+}
+
+async function executeSafeTransaction(safeTransaction, signature, safeAddress) {
+  try {
+    // Get the wallet client for the default account that will broadcast the transaction
+    const RPC_URL = process.env.RPC_URL || "https://eth.llamarpc.com";
+    const ALICE_PRIVATE_KEY = process.env.ALICE_PRIVATE_KEY;
+    const formattedAlicePrivateKey = ALICE_PRIVATE_KEY.startsWith("0x")
+      ? ALICE_PRIVATE_KEY
+      : `0x${ALICE_PRIVATE_KEY}`;
+    
+    const aliceAccount = privateKeyToAccount(formattedAlicePrivateKey);
+    const walletClient = createWalletClient({
+      account: aliceAccount,
+      chain: customChain,
+      transport: http(RPC_URL),
+    });
+    
+    // Execute the Safe transaction through the Safe contract
+    const txHash = await walletClient.writeContract({
+      address: safeAddress,
+      abi: SAFE_ABI, // You'll need to define this
+      functionName: "execTransaction",
+      args: [
+        safeTransaction.to,
+        safeTransaction.value,
+        safeTransaction.data,
+        safeTransaction.operation,
+        safeTransaction.safeTxGas,
+        safeTransaction.baseGas,
+        safeTransaction.gasPrice,
+        safeTransaction.gasToken,
+        safeTransaction.refundReceiver,
+        signature,
+      ],
+    });
+    
+    return txHash;
+  } catch (error) {
+    console.error("Error executing Safe transaction:", error.message);
+    return null;
+  }
 }
 
 module.exports = { sendUsdcBalanceInfo, sendBalanceInfo, sendMintUsdcInfo, transfer };
