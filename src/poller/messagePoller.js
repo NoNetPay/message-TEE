@@ -48,11 +48,6 @@ async function pollMessagesAndProcess() {
             row.phoneNumber,
             `https://pharosscan.xyz/address/${receivedData.safeAddress}`
           );
-        } else {
-          await utils.sendMessageViaAppleScript(
-            row.phoneNumber,
-            `You are already registered.`
-          );
         }
       } else if (msg === "balance" && row.phoneNumber) {
         console.log("💰 Checking ETH balance for user:", row.phoneNumber);
