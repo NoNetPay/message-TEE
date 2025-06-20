@@ -15,8 +15,8 @@ const helper = require("../utils/helper");
 const { privateKeyToAccount } = require("viem/accounts");
 require("dotenv").config();
 
-const SafeProxyFactoryArtifact = require('@safe-global/safe-contracts/build/artifacts/contracts/proxies/SafeProxyFactory.sol/SafeProxyFactory.json');
-const SafeArtifact = require('@safe-global/safe-contracts/build/artifacts/contracts/Safe.sol/Safe.json');
+const SafeProxyFactoryArtifact = require("@safe-global/safe-contracts/build/artifacts/contracts/proxies/SafeProxyFactory.sol/SafeProxyFactory.json");
+const SafeArtifact = require("@safe-global/safe-contracts/build/artifacts/contracts/Safe.sol/Safe.json");
 
 const SAFE_ABI = [
   {
@@ -24,7 +24,7 @@ const SAFE_ABI = [
     name: "nonce",
     outputs: [{ type: "uint256", name: "" }],
     stateMutability: "view",
-    type: "function"
+    type: "function",
   },
   {
     inputs: [
@@ -37,12 +37,12 @@ const SAFE_ABI = [
       { type: "uint256", name: "gasPrice" },
       { type: "address", name: "gasToken" },
       { type: "address", name: "refundReceiver" },
-      { type: "uint256", name: "nonce" }
+      { type: "uint256", name: "nonce" },
     ],
     name: "getTransactionHash",
     outputs: [{ type: "bytes32", name: "" }],
     stateMutability: "view",
-    type: "function"
+    type: "function",
   },
   {
     inputs: [
@@ -55,20 +55,20 @@ const SAFE_ABI = [
       { type: "uint256", name: "gasPrice" },
       { type: "address", name: "gasToken" },
       { type: "address", name: "refundReceiver" },
-      { type: "bytes", name: "signatures" }
+      { type: "bytes", name: "signatures" },
     ],
     name: "execTransaction",
     outputs: [{ type: "bool", name: "success" }],
     stateMutability: "nonpayable",
-    type: "function"
+    type: "function",
   },
   {
     inputs: [],
     name: "getOwners",
     outputs: [{ type: "address[]", name: "" }],
     stateMutability: "view",
-    type: "function"
-  }
+    type: "function",
+  },
 ];
 const SAFE_PROXY_FACTORY_ABI = SafeProxyFactoryArtifact.abi;
 const SAFE_BYTECODE = SafeArtifact.bytecode;
@@ -623,7 +623,7 @@ const USDC_ABI = [
     type: "function",
   },
 ];
-const USDC_ADDRESS = "0xa3B2a0D85A9A4e4d19880ccB9622b1cA4f3C6690";
+const USDC_ADDRESS = "0x5449AF38eB00a996313cf075D5CeE124e007c21c";
 const publicClient = walletUtils.publicClient;
 
 async function getUSDCBalance(address) {
@@ -891,18 +891,19 @@ async function transfer(phoneNumber, toAddress, amount) {
         // Create account from private key
         const account = privateKeyToAccount(privateKey);
         const RPC_URL = process.env.RPC_URL || "https://eth.llamarpc.com";
-        
+
         // Create a wallet client for signing
         const walletClient = createWalletClient({
           account,
-          chain: chain.pharosDevnet,
+          chain: chain.pharosTestnet,
           transport: http(RPC_URL),
         });
 
         console.log("walletclient", walletClient);
 
         // For this example, we'll transfer USDC
-        const recipient = toAddress || "0x0000000000000000000000000000000000000000";
+        const recipient =
+          toAddress || "0x0000000000000000000000000000000000000000";
         const transferAmount = parseEther((amount || "10").toString());
 
         // Create the USDC transfer calldata
@@ -940,11 +941,11 @@ async function transfer(phoneNumber, toAddress, amount) {
 
         // Calculate the transaction hash using EIP-712
         // This is similar to the calculateSafeTransactionHash function in the reference code
-        const domain = { 
-          chainId: chainId, 
-          verifyingContract: safeAddress 
+        const domain = {
+          chainId: chainId,
+          verifyingContract: safeAddress,
         };
-        
+
         const types = {
           SafeTx: [
             { name: "to", type: "address" },
@@ -957,7 +958,7 @@ async function transfer(phoneNumber, toAddress, amount) {
             { name: "gasToken", type: "address" },
             { name: "refundReceiver", type: "address" },
             { name: "nonce", type: "uint256" },
-          ]
+          ],
         };
 
         // Get the transaction hash directly from the Safe contract for cross-verification
@@ -1002,27 +1003,31 @@ async function transfer(phoneNumber, toAddress, amount) {
 
         // Now execute the transaction with the proper signature format
         // Based on the reference code's buildSignatureBytes function
-        
+
         // First, clean the signature (remove 0x prefix if present)
-        const signatureWithoutPrefix = signature.startsWith("0x") ? signature.slice(2) : signature;
-        
+        const signatureWithoutPrefix = signature.startsWith("0x")
+          ? signature.slice(2)
+          : signature;
+
         // Format signature according to Gnosis Safe expectations
         // The format for a single signature is {bytes32 r}{bytes32 s}{uint8 v}
         // But we need to ensure the v value is correct
         const r = signatureWithoutPrefix.slice(0, 64);
         const s = signatureWithoutPrefix.slice(64, 128);
         let v = parseInt(signatureWithoutPrefix.slice(128, 130), 16);
-        
+
         // Adjust v if needed (based on the reference code's signHash function)
         // Sometimes v needs to be adjusted (1b -> 1f, 1c -> 20)
         if (v === 0x1b) v = 0x1f;
         if (v === 0x1c) v = 0x20;
-        
+
         // Format the signature in the way Safe expects
-        const formattedSignature = `0x${r}${s}${v.toString(16).padStart(2, '0')}`;
-        
+        const formattedSignature = `0x${r}${s}${v
+          .toString(16)
+          .padStart(2, "0")}`;
+
         console.log("Formatted signature:", formattedSignature);
-        
+
         // Execute the transaction
         const ALICE_PRIVATE_KEY = process.env.ALICE_PRIVATE_KEY;
         const formattedAlicePrivateKey = ALICE_PRIVATE_KEY.startsWith("0x")
@@ -1032,7 +1037,7 @@ async function transfer(phoneNumber, toAddress, amount) {
         const aliceAccount = privateKeyToAccount(formattedAlicePrivateKey);
         const execWalletClient = createWalletClient({
           account: aliceAccount,
-          chain: chain.pharosDevnet,
+          chain: chain.pharosTestnet,
           transport: http(RPC_URL),
         });
 
@@ -1159,7 +1164,6 @@ async function calculateSafeTxHash(safeTransaction, safeAddress) {
   return txHash;
 }
 
-
 async function executeSafeTransaction(safeTransaction, signature, safeAddress) {
   try {
     // Set up wallet client as before
@@ -1170,10 +1174,10 @@ async function executeSafeTransaction(safeTransaction, signature, safeAddress) {
       : `0x${ALICE_PRIVATE_KEY}`;
 
     const aliceAccount = privateKeyToAccount(formattedAlicePrivateKey);
-    
+
     const walletClient = createWalletClient({
       account: aliceAccount,
-      chain: chain.pharosDevnet,
+      chain: chain.pharosTestnet,
       transport: http(RPC_URL),
     });
 
@@ -1183,26 +1187,28 @@ async function executeSafeTransaction(safeTransaction, signature, safeAddress) {
       abi: SAFE_ABI,
       functionName: "getOwners",
     });
-    
+
     // Get the owner who signed the transaction
     const owner = owners[0];
-    
+
     // Strip 0x prefix if present
-    const signatureNoPrefix = signature.startsWith("0x") ? signature.slice(2) : signature;
-    
+    const signatureNoPrefix = signature.startsWith("0x")
+      ? signature.slice(2)
+      : signature;
+
     // Extract r, s, v components
     const r = `0x${signatureNoPrefix.slice(0, 64)}`;
     const s = `0x${signatureNoPrefix.slice(64, 128)}`;
     const v = parseInt(signatureNoPrefix.slice(128, 130), 16);
-    
+
     // Construct a properly formatted signature for Safe
     // Safe expects: {32-bytes owner}{1-byte signature type}{actual signature}
-    const signatureType = '01'; // ECDSA signature type
+    const signatureType = "01"; // ECDSA signature type
     const ownerNoPrefix = owner.slice(2).toLowerCase();
     const safeSignature = `0x000000000000000000000000${ownerNoPrefix}${signatureType}${signatureNoPrefix}`;
-    
+
     console.log("Safe signature format:", safeSignature);
-    
+
     // Execute the transaction
     const txHash = await walletClient.writeContract({
       address: safeAddress,

@@ -1,22 +1,22 @@
 const { defineChain } = require("viem");
 
-const pharosDevnet = defineChain({
-  id: 50002,
-  name: "Pharos Devnet",
-  network: "pharos-devnet",
+const pharosTestnet = defineChain({
+  id: 688688,
+  name: "Pharos Testnet",
+  network: "pharos-testnet",
   nativeCurrency: {
     decimals: 18,
     name: "Pharos",
-    symbol: "PHS",
+    symbol: "PHRS",
   },
   rpcUrls: {
     default: {
-      http: ["https://devnet.dplabs-internal.com"],
-      webSocket: ["wss://devnet.dplabs-internal.com"],
+      http: ["https://testnet.dplabs-internal.com"],
+      webSocket: ["wss://testnet.dplabs-internal.com"],
     },
     public: {
-      http: ["https://devnet.dplabs-internal.com"],
-      webSocket: ["wss://devnet.dplabs-internal.com"],
+      http: ["https://testnet.dplabs-internal.com"],
+      webSocket: ["wss://testnet.dplabs-internal.com"],
     },
   },
   blockExplorers: {
@@ -30,4 +30,4 @@ const pharosDevnet = defineChain({
   maxPendingTxs: 64,
 });
 
-module.exports = { pharosDevnet };
+module.exports = { pharosTestnet };

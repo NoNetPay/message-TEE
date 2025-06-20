@@ -1,10 +1,10 @@
-// Example of using the Pharos Devnet with Viem
+// Example of using the Pharos Testnet with Viem
 const { createPublicClient, createWalletClient, http } = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
-const { pharosDevnet } = require("./chains"); // Import our custom chain
+const { pharosTestnet } = require("./chains"); // Import our custom chain
 
 const publicClient = createPublicClient({
-  chain: pharosDevnet,
+  chain: pharosTestnet,
   transport: http(),
 });
 
@@ -23,7 +23,7 @@ function createWallet(privateKey) {
 
   return createWalletClient({
     account,
-    chain: pharosDevnet,
+    chain: pharosTestnet,
     transport: http(),
   });
 }
@@ -47,8 +47,6 @@ async function sendTransaction(walletClient, toAddress, amount) {
     console.error("Error sending transaction:", error);
   }
 }
-
-
 
 // Uncomment to run the example
 // main().catch(console.error);
